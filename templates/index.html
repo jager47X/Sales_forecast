@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sales Prediction App</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div id="landing-page">
+        <header>
+            <h1>Sales Prediction App</h1>
+            <p>Predict the business with AI power.</p>
+        </header>
+        <div id="upload-section">
+            <input type="file" id="csv" hidden>
+            <label for="csv" class="file-upload-button" id="file-label">Select file to predict</label><br><br>
+            <button type="submit" class="submit-csv">Submit</button>
+        </div>
+    </div>
+
+    <div id="loading-screen" style="display: none;">
+        <div class="loading-content">
+            <h2>Analyzing your data... This may take some time.</h2>
+            <div class="loader"></div>
+        </div>
+    </div>
+
+    <div id="container" style="display: none;">
+        <form id="prediction-form" class="form-grid">
+            <div>
+                <label for="date">Date (YYYY-MM-DD):</label>
+                <input type="text" id="date" name="date">
+            </div>
+
+            <div>
+                <label for="weather">Weather:</label>
+                <select id="weather" name="weather"></select>
+            </div>
+
+            <div>
+                <label for="holiday">Holiday:</label>
+                <select id="holiday" name="holiday">
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="address">Address:</label>
+                <select id="address" name="address"></select>
+            </div>
+
+            <h3>Products</h3>
+            <div id="products" style="grid-column: span 3;">
+                <div class="product">
+                    <label for="product_name_1">Product Name 1:</label>
+                    <select class="product-name" name="product_name_1" id="product_name_1"></select>
+                </div>
+            </div>
+
+            <div class="product-buttons">
+                <button type="button" onclick="deleteProduct()" class="delete">Delete This Product</button>
+                <button type="button" onclick="addProduct()">Add More Product</button>
+            </div>
+
+            <div class="predict-button">
+                <button type="submit" class="predict">Predict</button>
+            </div>
+        </form>
+
+        <div id="results-section" style="display: none;">
+            <h3 id="prediction-results-header">Prediction Results</h3>
+            <div id="results" class="results-container"></div>
+            <button id="change-attributes" onclick="showPredictionForm()">Change Attributes</button>
+            <a id="download-csv" href="#">Save to CSV</a>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('csv').addEventListener('change', function(event) {
+            const fileName = event.target.files[0].name;
+            document.getElementById('file-label').textContent = `Selected: ${fileName}`;
+        });
+
+        document.querySelector('.submit-csv').addEventListener('click', function(event) {
+            event.preventDefault();
+            const csvInput = document.getElementById('csv').files[0];
+            if (!csvInput) {
+                alert("Please select a CSV file.");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', csvInput);
+
+            document.getElementById('landing-page').style.display = 'none';
+            document.getElementById('loading-screen').style.display = 'block';
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            }).then(response => response.json())
+            .then(data => {
+                document.getElementById('loading-screen').style.display = 'none';
+                if (data.error) {
+                    document.getElementById('landing-page').style.display = 'block';
+                    const resultsDiv = document.getElementById('results');
+                    resultsDiv.innerHTML = `<p>Error: ${data.error}</p>`;
+                } else {
+                    document.getElementById('container').style.display = 'flex';
+                    document.getElementById('results-section').style.display = 'none';
+                    document.getElementById('prediction-form').style.display = 'block';
+
+                    // Populate weather select
+                    const weatherSelect = document.getElementById('weather');
+                    weatherSelect.innerHTML = '';
+                    data.weather.forEach(weather => {
+                        const option = document.createElement('option');
+                        option.value = weather;
+                        option.text = weather;
+                        weatherSelect.add(option);
+                    });
+
+                    // Populate address select
+                    const addressSelect = document.getElementById('address');
+                    addressSelect.innerHTML = '';
+                    data.address.forEach(address => {
+                        const option = document.createElement('option');
+                        option.value = address;
+                        option.text = address;
+                        addressSelect.add(option);
+                    });
+
+                    // Populate product select
+                    const productSelect = document.querySelector('.product-name');
+                    productSelect.innerHTML = '';
+                    data.products.forEach(product => {
+                        const option = document.createElement('option');
+                        option.value = product;
+                        option.text = product;
+                        productSelect.add(option);
+                    });
+                }
+            })
+            .catch(error => {
+                document.getElementById('loading-screen').style.display = 'none';
+                document.getElementById('landing-page').style.display = 'block';
+                const resultsDiv = document.getElementById('results');
+                resultsDiv.innerHTML = `<p>Error: ${error.message}</p>`;
+            });
+        });
+
+        let productCount = 1;
+
+        function addProduct() {
+            productCount++;
+            const productDiv = document.createElement('div');
+            productDiv.classList.add('product');
+            productDiv.innerHTML = `
+                <label for="product_name_${productCount}">Product Name ${productCount}:</label>
+                <select class="product-name" name="product_name_${productCount}" id="product_name_${productCount}"></select>
+            `;
+            document.getElementById('products').appendChild(productDiv);
+
+            // Populate new product select
+            const newProductSelect = productDiv.querySelector('.product-name');
+            const products = document.querySelector('.product-name').options;
+            for (let i = 0; i < products.length; i++) {
+                const option = document.createElement('option');
+                option.value = products[i].value;
+                option.text = products[i].text;
+                newProductSelect.add(option);
+            }
+        }
+
+        function deleteProduct() {
+            if (productCount > 1) {
+                const productsDiv = document.getElementById('products');
+                productsDiv.removeChild(productsDiv.lastChild);
+                productCount--;
+            } else {
+                alert("ERROR: Cannot delete this product. At least one product is needed to predict the sales.");
+            }
+        }
+
+        function showPredictionForm() {
+            document.getElementById('results-section').style.display = 'none';
+            document.getElementById('prediction-form').style.display = 'block';
+        }
+
+        document.getElementById('prediction-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const date = document.getElementById('date').value;
+            const weather = document.getElementById('weather').value;
+            const holiday = document.getElementById('holiday').value;
+            const address = document.getElementById('address').value;
+            const products = [];
+
+            document.querySelectorAll('.product-name').forEach((select) => {
+                products.push({ name: select.value });
+            });
+
+            fetch('/predict', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ date, weather, holiday, address, products })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const resultsDiv = document.getElementById('results');
+                const resultsHeader = document.getElementById('prediction-results-header');
+                const changeAttributesButton = document.getElementById('change-attributes');
+                const downloadCsvLink = document.getElementById('download-csv');
+
+                if (data.error) {
+                    resultsDiv.innerHTML = `<p>Error: ${data.error}</p>`;
+                    resultsHeader.style.display = 'block';
+                    resultsDiv.style.display = 'block';
+                } else {
+                    resultsHeader.style.display = 'block';
+                    resultsDiv.style.display = 'block';
+                    resultsDiv.innerHTML = `
+                        <p>Date: ${data.selected_date}</p>
+                        <p>Weather: ${data.weather}</p>
+                        <p>Address: ${data.address}</p>
+                        <p>Prediction Results:</p>
+                    `;
+                    data.product_sales.forEach(product => {
+                        resultsDiv.innerHTML += `<p>Forecasted number of sales for "${product.product_name}" is ${product.forecasted_sales.toFixed(2)}</p>`;
+                        resultsDiv.innerHTML += `<p>Price of "${product.product_name}" is ${product.price.toFixed(2)}</p>`;
+                        resultsDiv.innerHTML += `<p
+
+                        <p>Prediction Result of revenue for "${product.product_name}" is ${product.revenue.toFixed(2)}</p>`;
+                    });
+                    resultsDiv.innerHTML += `<p>Accuracy of Prediction: ${data.accuracy.toFixed(2)}%</p>`;
+
+                    // Show change attributes button
+                    changeAttributesButton.style.display = 'block';
+
+                    // Show save to CSV link
+                    downloadCsvLink.href = '/download_csv';
+                    downloadCsvLink.style.display = 'block';
+
+                    // Hide the prediction form
+                    document.getElementById('prediction-form').style.display = 'none';
+                    document.getElementById('results-section').style.display = 'block';
+                }
+            })
+            .catch(error => {
+                const resultsDiv = document.getElementById('results');
+                const resultsHeader = document.getElementById('prediction-results-header');
+                resultsHeader.style.display = 'block';
+                resultsDiv.style.display = 'block';
+                resultsDiv.innerHTML = `<p>Error: ${error.message}</p>`;
+            });
+        });
+    </script>
+</body>
+</html>
